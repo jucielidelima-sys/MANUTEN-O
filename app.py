@@ -483,7 +483,7 @@ with st.sidebar:
         st.session_state.user = None
         st.rerun()
 
-header("⚙️ Centro de Manutenção Industrial", "Versão V8 ")
+header("⚙️ Centro de Manutenção Industrial", "")
 if auto_msgs:
     st.success(" | ".join(auto_msgs[:2]))
 
