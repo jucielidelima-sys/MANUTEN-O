@@ -1,4 +1,4 @@
-import os
+mport os
 import sqlite3
 import hashlib
 from datetime import datetime, timedelta
@@ -750,13 +750,13 @@ elif page == "Abrir OS":
             criticality = st.selectbox("Criticidade", ["Baixa","Média","Alta","Crítica"], index=2)
         with c2:
             machine_options = machines_df["code"].tolist() if not machines_df.empty else []
-            machine_code = st.selectbox("Máquina", machine_options, key="abrir_os_machine_code")
+            machine_code = st.selectbox("Máquina", machine_options)
             machine_name = ""
             if machine_code and not machines_df.empty:
-                msel = machines_df.loc[machines_df["code"] == machine_code]
+                msel = machines_df[machines_df["code"] == machine_code]
                 if not msel.empty:
                     machine_name = str(msel.iloc[0]["name"] or "")
-            st.text_input("Nome do equipamento", value=machine_name, key="abrir_os_machine_name", disabled=True)
+            st.text_input("Nome do equipamento", value=machine_name, disabled=True)
             status = st.selectbox("Status inicial", ["Máquina Parada","Aberta"], index=0)
             assigned_technician = st.selectbox("Técnico responsável", [""] + (tech_active_df["name"].tolist() if not tech_active_df.empty else []))
         with c3:
