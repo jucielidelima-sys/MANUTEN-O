@@ -551,7 +551,7 @@ with st.sidebar:
         st.session_state.user = None
         st.rerun()
 
-header("⚙️ Centro de Manutenção Industrial • SEM INATIVOS", "Versão V11 LIMPA AJUSTADA SEM INATIVOS • MTBF REAL")
+header("⚙️ Centro de Manutenção Industrial • ", " • MTBF REAL")
 if auto_msgs:
     st.success(" | ".join(auto_msgs[:2]))
 
