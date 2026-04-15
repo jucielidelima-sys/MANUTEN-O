@@ -15,7 +15,7 @@ UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 LOGO_PATH = os.path.join(UPLOAD_DIR, "logo_empresa.png")
 
-st.set_page_config(page_title="Manutenção Fabril⚙️🛠️", page_icon="🏭", layout="wide")
+st.set_page_config(page_title="Manutenção V11 Corrigida", page_icon="🏭", layout="wide")
 
 st.markdown("""
 <style>
@@ -521,7 +521,7 @@ if "user" not in st.session_state:
     st.session_state.user = None
 
 def login_screen():
-    header("🏭 Manutenção Fabril 🛠️⚙️🦾", "Gestão completa de máquinas e técnicos")
+    header("🏭 Manutenção V11 Corrigida", "Gestão completa de máquinas e técnicos • Cadastros só para Gestor")
     a, b, c = st.columns([1.15, 1.2, 1.15])
     with b:
         st.markdown('<div class="panel">', unsafe_allow_html=True)
@@ -1264,8 +1264,15 @@ TV_REFRESH_SECONDS = "10"
     with t1:
         if st.button("Enviar teste manutenção", use_container_width=True):
             ok, detail = send_whatsapp(test_msg, manut_nums())
-            st.success(detail) if ok else st.error(detail)
+            if ok:
+                st.success(detail)
+            else:
+                st.error(detail)
     with t2:
         if st.button("Enviar teste gestão", use_container_width=True):
             ok, detail = send_whatsapp(test_msg, gestao_nums())
+            if ok:
+                st.success(detail)
+            else:
+                st.error(detail)
             st.success(detail) if ok else st.error(detail)
