@@ -15,7 +15,7 @@ UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 LOGO_PATH = os.path.join(UPLOAD_DIR, "logo_empresa.png")
 
-st.set_page_config(page_title="Manutenção V11 Corrigida", page_icon="🏭", layout="wide")
+st.set_page_config(page_title="Manutenção Fabril⚙️🛠️", page_icon="🏭", layout="wide")
 
 st.markdown("""
 <style>
