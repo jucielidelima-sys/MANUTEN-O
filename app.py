@@ -521,7 +521,7 @@ if "user" not in st.session_state:
     st.session_state.user = None
 
 def login_screen():
-    header("🏭 Manutenção V11 Corrigida", "Gestão completa de máquinas e técnicos 🛠️⚙️🦾")
+    header("🏭 Manutenção Fabril", "Gestão completa de máquinas e técnicos 🛠️⚙️🦾")
     a, b, c = st.columns([1.15, 1.2, 1.15])
     with b:
         st.markdown('<div class="panel">', unsafe_allow_html=True)
