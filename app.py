@@ -15,7 +15,7 @@ UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 LOGO_PATH = os.path.join(UPLOAD_DIR, "logo_empresa.png")
 
-st.set_page_config(page_title="Manutenção V11 Limpa", page_icon="🏭", layout="wide")
+st.set_page_config(page_title="Manutenção V11 Corrigida", page_icon="🏭", layout="wide")
 
 st.markdown("""
 <style>
@@ -175,8 +175,15 @@ def send_whatsapp(msg, targets):
         client = Client(sid, token)
         sent = 0
         for target in targets:
+            target = str(target).strip()
+            if not target:
+                continue
+            if not target.startswith("whatsapp:"):
+                target = f"whatsapp:{target}"
             client.messages.create(body=msg, from_=source, to=target)
             sent += 1
+        if sent == 0:
+            return False, "Nenhum destino válido para envio."
         return True, f"WhatsApp enviado para {sent} destino(s)."
     except Exception as e:
         return False, f"Falha ao enviar WhatsApp: {e}"
@@ -514,7 +521,7 @@ if "user" not in st.session_state:
     st.session_state.user = None
 
 def login_screen():
-    header("🏭 Manutenção V10 Fábrica", "Gestão completa de máquinas e técnicos • Cadastros só para Gestor")
+    header("🏭 Manutenção V11 Corrigida", "Gestão completa de máquinas e técnicos • Cadastros só para Gestor")
     a, b, c = st.columns([1.15, 1.2, 1.15])
     with b:
         st.markdown('<div class="panel">', unsafe_allow_html=True)
@@ -790,7 +797,10 @@ elif page == "Abrir OS":
                 st.success(f"OS {os_number} aberta com sucesso.")
                 if status == "Máquina Parada":
                     ok, detail = send_open_alert(os_number, machine_code, sector, criticality, requester, description.strip())
-                    st.success(detail) if ok else st.warning(detail)
+                    if ok:
+                        st.success(detail)
+                    else:
+                        st.warning(detail)
                     st.markdown('<div class="alert-box"><strong>🚨 ALERTA:</strong> máquina marcada como parada.</div>', unsafe_allow_html=True)
                 st.rerun()
 
@@ -803,7 +813,7 @@ elif page == "Painel de OS":
     else:
         f1, f2, f3 = st.columns(3)
         with f1:
-            status_filter = st.selectbox("Filtrar status", ["Todos","Aberta","Máquina Parada","Em manutenção","Pausada","Finalizada"])
+            status_filter = st.selectbox("Filtrar status", ["Todos","Aberta","Máquina Parada","Preventiva","Em manutenção","Pausada","Finalizada"])
         with f2:
             machine_filter = st.selectbox("Filtrar máquina", ["Todas"] + wo_df["machine_code"].fillna("Sem máquina").unique().tolist())
         with f3:
@@ -831,7 +841,7 @@ elif page == "Painel de OS":
             with act:
                 a1, a2, a3 = st.columns(3)
                 with a1:
-                    if row["status"] in ["Aberta","Máquina Parada"] and st.button(f"Iniciar {row['id']}", key=f"iniciar_{row['id']}", use_container_width=True):
+                    if row["status"] in ["Aberta","Máquina Parada","Preventiva"] and st.button(f"Iniciar {row['id']}", key=f"iniciar_{row['id']}", use_container_width=True):
                         start = now_str()
                         response = mins_between(row["open_dt"], start)
                         q("UPDATE work_orders SET service_start_dt=?, status=?, response_min=? WHERE id=?", (start, "Em manutenção", response, int(row["id"])))
@@ -912,7 +922,9 @@ elif page == "Histórico":
         hist["tempo_resposta"] = hist["response_min"].fillna(0).map(fmt_min)
         hist["tempo_reparo"] = hist["repair_min"].fillna(0).map(fmt_min)
         hist["tempo_parada"] = hist["downtime_min"].fillna(0).map(fmt_min)
-        view = hist[["os_number","open_dt","sector","machine_code","criticality","status","assigned_technician","tempo_resposta","tempo_reparo","tempo_parada","total_cost"]]
+        cols_hist = ["os_number","open_dt","sector","machine_code","machine_name","criticality","status","assigned_technician","tempo_resposta","tempo_reparo","tempo_parada","total_cost"]
+        cols_hist = [c for c in cols_hist if c in hist.columns]
+        view = hist[cols_hist]
         st.dataframe(view, use_container_width=True, hide_index=True)
         if user["profile"] == "Gestor" and not hist.empty:
             os_options = [f"{r['os_number']} | {r.get('machine_name','') or r.get('machine_code','')}" for _, r in hist.iterrows()]
@@ -1179,11 +1191,15 @@ elif page == "Preventiva":
             sector = machine_info.iloc[0]["sector"] if not machine_info.empty else "Produção"
             criticality = machine_info.iloc[0]["criticality"] if not machine_info.empty else "Média"
             desc = f"Preventiva: {row['title']} | {row['notes'] or ''}".strip()
+            machine_name_prev = ""
+            machine_name_df = df("SELECT name FROM machines WHERE code=?", (row["machine_code"],))
+            if not machine_name_df.empty:
+                machine_name_prev = str(machine_name_df.iloc[0]["name"] or "")
             q("""INSERT INTO work_orders (
-                os_number, open_dt, sector, machine_code, requester, description, criticality, status,
+                os_number, open_dt, sector, machine_code, machine_name, requester, description, criticality, status,
                 stop_start_dt, assigned_technician, operator_signature, photo_path, notes, maintenance_type
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", (
-                os_number, now_str(), sector, row["machine_code"], "Sistema Preventiva", desc, criticality,
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", (
+                os_number, now_str(), sector, row["machine_code"], machine_name_prev, "Sistema Preventiva", desc, criticality,
                 "Preventiva", None, "", "Sistema Preventiva", "", row["notes"] or "", "Preventiva"
             ))
             st.success(f"Preventiva {os_number} criada.")
@@ -1218,23 +1234,20 @@ elif page == "Configurações":
 DB_MODE = "sqlite"  # ou "postgres"
 POSTGRES_URL = "postgresql://usuario:senha@host:5432/banco"
 
- elif page == "Configurações":
-    st.markdown('<div class="panel">', unsafe_allow_html=True)
-    st.subheader("🔌 Configurações da fábrica")
-    st.code("""TWILIO_ACCOUNT_SID = "seu_account_sid"
+# WhatsApp
+TWILIO_ACCOUNT_SID = "seu_account_sid"
 TWILIO_AUTH_TOKEN = "seu_auth_token"
 TWILIO_WHATSAPP_FROM = "whatsapp:+14155238886"
 
-WHATSAPP_MANUTENCAO = "whatsapp:+5547999204759,whatsapp:+5547989190422"
-WHATSAPP_GESTAO = "whatsapp:+5546991144902"
+WHATSAPP_MANUTENCAO = "whatsapp:+554691144902"
+WHATSAPP_GESTAO = "whatsapp:+554691144902"
 
 ESCALATION_MINUTES = "30"
 TV_REFRESH_SECONDS = "10"
 """)
-    st.write("OS Baixa/Média: alerta só manutenção.")
-    st.write("OS Alta/Crítica: alerta manutenção + gestão.")
-    st.write("Sem início após o limite: escalona para gestão.")
-    st.write("Preventiva vencida: alerta automático.")
+    st.write("Cadastros, Preventiva, Segurança e Configurações: acesso exclusivo do Gestor da Manutenção.")
+    st.write("Painel de OS: acesso para Gestor e Manutenção.")
+    st.write("Máquinas e técnicos com histórico de OS não podem ser excluídos. Nesses casos, use desativar.")
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
     st.subheader("Logo da empresa")
     logo = st.file_uploader("Enviar logo PNG/JPG", type=["png","jpg","jpeg"])
@@ -1245,9 +1258,8 @@ TV_REFRESH_SECONDS = "10"
         st.image(LOGO_PATH, width=180)
     elif os.path.exists(LOGO_PATH):
         st.image(LOGO_PATH, width=180)
-
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-    test_msg = st.text_area("Mensagem de teste", value="🚨 Teste da V7 fábrica completa.")
+    test_msg = st.text_area("Mensagem de teste", value="🚨 Teste da V10 fábrica completa.")
     t1, t2 = st.columns(2)
     with t1:
         if st.button("Enviar teste manutenção", use_container_width=True):
