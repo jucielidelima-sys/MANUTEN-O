@@ -1218,84 +1218,38 @@ elif page == "Configurações":
 DB_MODE = "sqlite"  # ou "postgres"
 POSTGRES_URL = "postgresql://usuario:senha@host:5432/banco"
 
-# ==============================
-# CONFIG TWILIO (via Secrets)
-# ==============================
-def get_secret(key, default=""):
-    try:
-        return st.secrets[key]
-    except:
-        return default
+# WhatsApp
+TWILIO_ACCOUNT_SID = "seu_account_sid"
+TWILIO_AUTH_TOKEN = "seu_auth_token"
+TWILIO_WHATSAPP_FROM = "whatsapp:+14155238886"
 
-TWILIO_ACCOUNT_SID = get_secret("TWILIO_ACCOUNT_SID")
-TWILIO_AUTH_TOKEN = get_secret("TWILIO_AUTH_TOKEN")
-TWILIO_WHATSAPP_FROM = get_secret("TWILIO_WHATSAPP_FROM")
+WHATSAPP_MANUTENCAO = "whatsapp:+554691144902"
+WHATSAPP_GESTAO = "whatsapp:+554691144902"
 
-def manut_nums():
-    nums = get_secret("WHATSAPP_MANUTENCAO", "")
-    return [n.strip() for n in nums.split(",") if n.strip()]
-
-def gestao_nums():
-    nums = get_secret("WHATSAPP_GESTAO", "")
-    return [n.strip() for n in nums.split(",") if n.strip()]
-
-# ==============================
-# ENVIO WHATSAPP (CORRIGIDO)
-# ==============================
-def send_whatsapp(msg, numbers):
-    try:
-        if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN or not TWILIO_WHATSAPP_FROM:
-            return False, "Credenciais não configuradas."
-
-        if not numbers:
-            return False, "Nenhum número configurado."
-
-        client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-
-        enviados = 0
-
-        for numero in numbers:
-            numero = numero.strip()
-
-            # garante formato correto
-            if not numero.startswith("whatsapp:"):
-                numero = f"whatsapp:{numero}"
-
-            client.messages.create(
-                from_=TWILIO_WHATSAPP_FROM,
-                body=msg,
-                to=numero
-            )
-
-            enviados += 1
-
-        return True, f"WhatsApp enviado para {enviados} destino(s)."
-
-    except Exception as e:
-        return False, f"Erro ao enviar: {str(e)}"
-
-
-# ==============================
-# BOTÕES DE TESTE (CORRIGIDOS)
-# ==============================
-st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-
-test_msg = st.text_area("Mensagem de teste", value="🚨 Teste da V11 fábrica completa.")
-
-t1, t2 = st.columns(2)
-
-with t1:
-    if st.button("Enviar teste manutenção", use_container_width=True):
-        ok, detail = send_whatsapp(test_msg, manut_nums())
-        if ok:
-            st.success(detail)
-        else:
-            st.error(detail)
-
-with t2:
-    if st.button("Enviar teste gestão", use_container_width=True):
-        ok, detail = send_whatsapp(test_msg, gestao_nums())
-        if ok:
-            st.success(detail)
-        else:
-            st.error(detail)
+ESCALATION_MINUTES = "30"
+TV_REFRESH_SECONDS = "10"
+""")
+    st.write("Cadastros, Preventiva, Segurança e Configurações: acesso exclusivo do Gestor da Manutenção.")
+    st.write("Painel de OS: acesso para Gestor e Manutenção.")
+    st.write("Máquinas e técnicos com histórico de OS não podem ser excluídos. Nesses casos, use desativar.")
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+    st.subheader("Logo da empresa")
+    logo = st.file_uploader("Enviar logo PNG/JPG", type=["png","jpg","jpeg"])
+    if logo is not None:
+        with open(LOGO_PATH, "wb") as f:
+            f.write(logo.getbuffer())
+        st.success("Logo salva com sucesso.")
+        st.image(LOGO_PATH, width=180)
+    elif os.path.exists(LOGO_PATH):
+        st.image(LOGO_PATH, width=180)
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+    test_msg = st.text_area("Mensagem de teste", value="🚨 Teste da V10 fábrica completa.")
+    t1, t2 = st.columns(2)
+    with t1:
+        if st.button("Enviar teste manutenção", use_container_width=True):
+            ok, detail = send_whatsapp(test_msg, manut_nums())
+            st.success(detail) if ok else st.error(detail)
+    with t2:
+        if st.button("Enviar teste gestão", use_container_width=True):
+            ok, detail = send_whatsapp(test_msg, gestao_nums())
+            st.success(detail) if ok else st.error(detail)
