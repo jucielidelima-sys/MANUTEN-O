@@ -1218,7 +1218,10 @@ elif page == "Configurações":
 DB_MODE = "sqlite"  # ou "postgres"
 POSTGRES_URL = "postgresql://usuario:senha@host:5432/banco"
 
- st.code("""TWILIO_ACCOUNT_SID = "seu_account_sid"
+ elif page == "Configurações":
+    st.markdown('<div class="panel">', unsafe_allow_html=True)
+    st.subheader("🔌 Configurações da fábrica")
+    st.code("""TWILIO_ACCOUNT_SID = "seu_account_sid"
 TWILIO_AUTH_TOKEN = "seu_auth_token"
 TWILIO_WHATSAPP_FROM = "whatsapp:+14155238886"
 
