@@ -15,7 +15,7 @@ UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 LOGO_PATH = os.path.join(UPLOAD_DIR, "logo_empresa.png")
 
-st.set_page_config(page_title="Manutenção V11 Corrigida", page_icon="🏭", layout="wide")
+st.set_page_config(page_title="Manutenção Fabril⚙️🛠️", page_icon="🏭", layout="wide")
 
 st.markdown("""
 <style>
@@ -521,7 +521,7 @@ if "user" not in st.session_state:
     st.session_state.user = None
 
 def login_screen():
-    header("🏭 Manutenção V11 Corrigida", "Gestão completa de máquinas e técnicos • Cadastros só para Gestor")
+    header("🏭 Manutenção Fabril 🛠️⚙️🦾", "Gestão completa de máquinas e técnicos")
     a, b, c = st.columns([1.15, 1.2, 1.15])
     with b:
         st.markdown('<div class="panel">', unsafe_allow_html=True)
@@ -634,12 +634,12 @@ if page == "Dashboard":
     with c3:
         st.markdown('<div class="panel">', unsafe_allow_html=True)
         st.subheader("Alertas e indicadores")
-        st.write(f"**Custo total:** R$ {custo_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-        st.write(f"**Preventivas vencidas/hoje:** {prev_venc}")
-        st.write(f"**Peças em estoque mínimo:** {low_stock}")
-        st.write(f"**Taxa de disponibilidade:** {disponibilidade}%")
-        st.write(f"**Taxa de backlog:** {backlog_rate}%")
-        st.write(f"**Backlog em quantidade:** {backlog_qtd}")
+        st.write(f"*Custo total:* R$ {custo_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        st.write(f"*Preventivas vencidas/hoje:* {prev_venc}")
+        st.write(f"*Peças em estoque mínimo:* {low_stock}")
+        st.write(f"*Taxa de disponibilidade:* {disponibilidade}%")
+        st.write(f"*Taxa de backlog:* {backlog_rate}%")
+        st.write(f"*Backlog em quantidade:* {backlog_qtd}")
         st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
@@ -697,7 +697,7 @@ elif page == "Tela TV Fábrica":
     vals = [
         ("Máquinas paradas", paradas, "Urgência"),
         ("Em manutenção", manut, "Atendimento"),
-        ("OS abertas", abertas, "Fila"),
+  ("OS abertas", abertas, "Fila"),
         ("Preventivas vencidas", prev_venc, "Planejamento"),
         ("MTTR", f"{mttr} min", "Performance"),
     ]
@@ -764,7 +764,7 @@ elif page == "Abrir OS":
                 msel = machines_df.loc[machines_df["code"] == machine_code]
                 if not msel.empty:
                     machine_name = str(msel.iloc[0]["name"] or "")
-            st.markdown(f"**Nome do equipamento:** {machine_name or '-'}")
+            st.markdown(f"*Nome do equipamento:* {machine_name or '-'}")
             status = st.selectbox("Status inicial", ["Máquina Parada","Aberta"], index=0)
             assigned_technician = st.selectbox("Técnico responsável", [""] + (tech_active_df["name"].tolist() if not tech_active_df.empty else []))
         with c3:
@@ -782,7 +782,7 @@ elif page == "Abrir OS":
                 os_number = f"OS-{datetime.now().strftime('%Y%m%d%H%M%S')}"
                 photo_path = ""
                 if uploaded_file is not None:
-                    safe_name = f"{os_number}_{os.path.basename(uploaded_file.name)}".replace(" ", "_")
+                    safe_name = f"{os_number}{os.path.basename(uploaded_file.name)}".replace(" ", "")
                     photo_path = os.path.join(UPLOAD_DIR, safe_name)
                     os.makedirs(UPLOAD_DIR, exist_ok=True)
                     with open(photo_path, "wb") as f:
@@ -831,11 +831,11 @@ elif page == "Painel de OS":
             st.markdown(f'<div class="panel" style="margin-bottom:14px;"><div style="display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap;"><div><div style="font-size:1.05rem;font-weight:800;">{row["os_number"]} • {row["machine_code"] or "-"} • {row.get("machine_name","") or "-"}</div><div class="small-muted">{row["sector"]} • {row["criticality"]} • Solicitante: {row["requester"]}</div></div><div>{badge(row["status"])}</div></div></div>', unsafe_allow_html=True)
             desc, act = st.columns([1.55, 1.2])
             with desc:
-                st.write(f"**Equipamento:** {row.get('machine_name', '') or '-'}")
-                st.write(f"**Falha:** {row['description']}")
-                st.write(f"**Abertura:** {row['open_dt']}")
-                st.write(f"**Técnico:** {row['assigned_technician'] or '-'}")
-                st.write(f"**Parada total:** {fmt_min(row['downtime_min'])}")
+                st.write(f"*Equipamento:* {row.get('machine_name', '') or '-'}")
+                st.write(f"*Falha:* {row['description']}")
+                st.write(f"*Abertura:* {row['open_dt']}")
+                st.write(f"*Técnico:* {row['assigned_technician'] or '-'}")
+                st.write(f"*Parada total:* {fmt_min(row['downtime_min'])}")
                 if row.get("photo_path") and os.path.exists(row["photo_path"]):
                     st.image(row["photo_path"], caption="Foto da falha", use_container_width=True)
             with act:
@@ -877,7 +877,7 @@ elif page == "Painel de OS":
                     root_cause = st.text_input(f"Causa raiz {row['id']}", value=row["root_cause"] or "")
                     action_taken = st.text_area(f"Ação executada {row['id']}", value=row["action_taken"] or "", height=100)
                     tech_sign = st.text_input(f"Assinatura técnico {row['id']}", value=row["technician_signature"] or (row["assigned_technician"] or ""))
-                    st.markdown("**Baixa de peças**")
+                    st.markdown("*Baixa de peças*")
                     if parts_df.empty:
                         st.info("Cadastre peças primeiro.")
                     else:
@@ -1011,7 +1011,7 @@ elif page == "Cadastros":
                 """, unsafe_allow_html=True)
                 c1, c2, c3, c4 = st.columns(4)
                 with c1:
-                    st.write(f"**OS vinculadas:** {usage_count}")
+                    st.write(f"*OS vinculadas:* {usage_count}")
                 with c2:
                     if int(row["active"] or 0) == 1:
                         if st.button(f"Desativar maq {row['id']}", key=f"desativar_maq_{row['id']}", use_container_width=True):
@@ -1095,7 +1095,7 @@ elif page == "Cadastros":
                 """, unsafe_allow_html=True)
                 c1, c2, c3, c4 = st.columns(4)
                 with c1:
-                    st.write(f"**OS vinculadas:** {usage_count}")
+                    st.write(f"*OS vinculadas:* {usage_count}")
                 with c2:
                     if int(row["active"] or 0) == 1:
                         if st.button(f"Desativar {row['id']}", key=f"desativar_tech_{row['id']}", use_container_width=True):
@@ -1264,15 +1264,8 @@ TV_REFRESH_SECONDS = "10"
     with t1:
         if st.button("Enviar teste manutenção", use_container_width=True):
             ok, detail = send_whatsapp(test_msg, manut_nums())
-            if ok:
-                st.success(detail)
-            else:
-                st.error(detail)
+            st.success(detail) if ok else st.error(detail)
     with t2:
         if st.button("Enviar teste gestão", use_container_width=True):
             ok, detail = send_whatsapp(test_msg, gestao_nums())
-            if ok:
-                st.success(detail)
-            else:
-                st.error(detail)
             st.success(detail) if ok else st.error(detail)
