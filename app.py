@@ -1218,20 +1218,20 @@ elif page == "Configurações":
 DB_MODE = "sqlite"  # ou "postgres"
 POSTGRES_URL = "postgresql://usuario:senha@host:5432/banco"
 
-# WhatsApp
-TWILIO_ACCOUNT_SID = "seu_account_sid"
+ st.code("""TWILIO_ACCOUNT_SID = "seu_account_sid"
 TWILIO_AUTH_TOKEN = "seu_auth_token"
 TWILIO_WHATSAPP_FROM = "whatsapp:+14155238886"
 
-WHATSAPP_MANUTENCAO = "whatsapp:+554691144902"
-WHATSAPP_GESTAO = "whatsapp:+554691144902"
+WHATSAPP_MANUTENCAO = "whatsapp:+5547999204759,whatsapp:+5547989190422"
+WHATSAPP_GESTAO = "whatsapp:+5546991144902"
 
 ESCALATION_MINUTES = "30"
 TV_REFRESH_SECONDS = "10"
 """)
-    st.write("Cadastros, Preventiva, Segurança e Configurações: acesso exclusivo do Gestor da Manutenção.")
-    st.write("Painel de OS: acesso para Gestor e Manutenção.")
-    st.write("Máquinas e técnicos com histórico de OS não podem ser excluídos. Nesses casos, use desativar.")
+    st.write("OS Baixa/Média: alerta só manutenção.")
+    st.write("OS Alta/Crítica: alerta manutenção + gestão.")
+    st.write("Sem início após o limite: escalona para gestão.")
+    st.write("Preventiva vencida: alerta automático.")
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
     st.subheader("Logo da empresa")
     logo = st.file_uploader("Enviar logo PNG/JPG", type=["png","jpg","jpeg"])
@@ -1242,8 +1242,9 @@ TV_REFRESH_SECONDS = "10"
         st.image(LOGO_PATH, width=180)
     elif os.path.exists(LOGO_PATH):
         st.image(LOGO_PATH, width=180)
+
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-    test_msg = st.text_area("Mensagem de teste", value="🚨 Teste da V10 fábrica completa.")
+    test_msg = st.text_area("Mensagem de teste", value="🚨 Teste da V7 fábrica completa.")
     t1, t2 = st.columns(2)
     with t1:
         if st.button("Enviar teste manutenção", use_container_width=True):
