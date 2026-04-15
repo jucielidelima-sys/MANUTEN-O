@@ -1218,10 +1218,6 @@ elif page == "Configurações":
 DB_MODE = "sqlite"  # ou "postgres"
 POSTGRES_URL = "postgresql://usuario:senha@host:5432/banco"
 
-import streamlit as st
-from twilio.rest import Client
-import os
-
 # ==============================
 # CONFIG TWILIO (via Secrets)
 # ==============================
