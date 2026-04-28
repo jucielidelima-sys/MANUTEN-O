@@ -817,58 +817,122 @@ elif page == "Tela TV Fábrica":
 elif page == "Abrir OS":
     st.markdown('<div class="panel">', unsafe_allow_html=True)
     st.subheader("📋 Abrir ordem de serviço")
+    st.caption("Campos obrigatórios: Setor, Solicitante, Criticidade, Máquina, Status inicial, Técnico responsável, Assinatura operador e Descrição da falha. A foto é opcional.")
+
     with st.form("open_wo"):
         c1, c2, c3 = st.columns(3)
+
         with c1:
-            sector = st.text_input("Setor", value="Produção")
-            requester = st.text_input("Solicitante", value=user["full_name"])
-            criticality = st.selectbox("Criticidade", ["Baixa","Média","Alta","Crítica"], index=2)
+            sector = st.text_input("Setor *", value="")
+            requester = st.text_input("Solicitante *", value="")
+            criticality = st.selectbox(
+                "Criticidade *",
+                ["", "Baixa", "Média", "Alta", "Crítica"],
+                index=0
+            )
+
         with c2:
             machine_options = machines_df["code"].tolist() if not machines_df.empty else []
-            machine_code = st.selectbox("Máquina", machine_options, key="abrir_os_machine_code")
+            machine_code = st.selectbox(
+                "Máquina *",
+                [""] + machine_options,
+                index=0,
+                key="abrir_os_machine_code"
+            )
+
             machine_name = ""
             if machine_code and not machines_df.empty:
                 msel = machines_df.loc[machines_df["code"] == machine_code]
                 if not msel.empty:
                     machine_name = str(msel.iloc[0]["name"] or "")
+
             st.markdown(f"**Nome do equipamento:** {machine_name or '-'}")
-            status = st.selectbox("Status inicial", ["Máquina Parada","Aberta"], index=0)
-            assigned_technician = st.selectbox("Técnico responsável", [""] + (tech_active_df["name"].tolist() if not tech_active_df.empty else []))
+
+            status = st.selectbox(
+                "Status inicial *",
+                ["", "Máquina Parada", "Aberta"],
+                index=0
+            )
+
+            assigned_technician = st.selectbox(
+                "Técnico responsável *",
+                [""] + (tech_active_df["name"].tolist() if not tech_active_df.empty else []),
+                index=0
+            )
+
         with c3:
-            operator_signature = st.text_input("Assinatura operador", value=requester)
-            notes = st.text_input("Observações rápidas")
-            uploaded_file = st.file_uploader("Foto da falha", type=["png","jpg","jpeg"])
-        description = st.text_area("Descrição da falha", height=110)
+            operator_signature = st.text_input("Assinatura operador *", value="")
+            uploaded_file = st.file_uploader("Foto da falha", type=["png", "jpg", "jpeg"])
+
+        description = st.text_area("Descrição da falha *", value="", height=110)
+
         submit = st.form_submit_button("Abrir OS", use_container_width=True)
+
         if submit:
+            erros = []
+
+            if not sector.strip():
+                erros.append("Informe o setor.")
+            if not requester.strip():
+                erros.append("Informe o solicitante.")
+            if not criticality:
+                erros.append("Selecione a criticidade.")
             if not machine_code:
-                st.error("Selecione uma máquina.")
-            elif not description.strip():
-                st.error("Descreva a falha.")
+                erros.append("Selecione a máquina.")
+            if not status:
+                erros.append("Selecione o status inicial.")
+            if not assigned_technician:
+                erros.append("Selecione o técnico responsável.")
+            if not operator_signature.strip():
+                erros.append("Informe a assinatura do operador.")
+            if not description.strip():
+                erros.append("Descreva a falha.")
+
+            if erros:
+                for erro in erros:
+                    st.error(erro)
             else:
                 os_number = f"OS-{datetime.now().strftime('%Y%m%d%H%M%S')}"
                 photo_path = ""
+
                 if uploaded_file is not None:
                     safe_name = f"{os_number}_{os.path.basename(uploaded_file.name)}".replace(" ", "_")
                     photo_path = os.path.join(UPLOAD_DIR, safe_name)
                     os.makedirs(UPLOAD_DIR, exist_ok=True)
                     with open(photo_path, "wb") as f:
                         f.write(uploaded_file.getbuffer())
+
                 q("""INSERT INTO work_orders (
                     os_number, open_dt, sector, machine_code, machine_name, requester, description, criticality, status,
                     stop_start_dt, assigned_technician, operator_signature, photo_path, notes, maintenance_type
                 ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", (
-                    os_number, now_str(), sector, machine_code, machine_name, requester, description.strip(), criticality, status,
-                    now_str() if status == "Máquina Parada" else None, assigned_technician, operator_signature, photo_path, notes, "Corretiva"
+                    os_number,
+                    now_str(),
+                    sector.strip(),
+                    machine_code,
+                    machine_name,
+                    requester.strip(),
+                    description.strip(),
+                    criticality,
+                    status,
+                    now_str() if status == "Máquina Parada" else None,
+                    assigned_technician,
+                    operator_signature.strip(),
+                    photo_path,
+                    "",
+                    "Corretiva"
                 ))
+
                 st.success(f"OS {os_number} aberta com sucesso.")
+
                 if status == "Máquina Parada":
-                    ok, detail = send_open_alert(os_number, machine_code, sector, criticality, requester, description.strip())
+                    ok, detail = send_open_alert(os_number, machine_code, sector.strip(), criticality, requester.strip(), description.strip())
                     if ok:
                         st.success(detail)
                     else:
                         st.warning(detail)
                     st.markdown('<div class="alert-box"><strong>🚨 ALERTA:</strong> máquina marcada como parada.</div>', unsafe_allow_html=True)
+
                 st.rerun()
 
 elif page == "Painel de OS":
