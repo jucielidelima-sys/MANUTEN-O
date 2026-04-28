@@ -101,29 +101,52 @@ def get_connection():
     if mode == "postgres":
         try:
             import psycopg
+            from psycopg.rows import dict_row
+
             db_url = sec("POSTGRES_URL", "")
             if not db_url:
                 raise ValueError("POSTGRES_URL não configurada.")
+
             conn = psycopg.connect(db_url)
-            conn.row_factory = psycopg.rows.dict_row
+            conn.row_factory = dict_row
             return conn, "postgres"
+
         except Exception as e:
             st.warning(f"Falha ao conectar no PostgreSQL. Usando SQLite. Motivo: {e}")
+
     conn = sqlite3.connect(DB_SQLITE, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn, "sqlite"
+
+def adapt_sql(sql, mode):
+    # O app foi escrito originalmente para SQLite usando ?.
+    # No PostgreSQL/psycopg o marcador correto é %s.
+    if mode == "postgres":
+        return sql.replace("?", "%s")
+    return sql
 
 def q(sql, params=(), fetch=False, many=False):
     conn, mode = get_connection()
     cur = conn.cursor()
     try:
+        sql = adapt_sql(sql, mode)
+
         if many:
             cur.executemany(sql, params)
         else:
             cur.execute(sql, params)
+
         out = cur.fetchall() if fetch else None
         conn.commit()
         return out
+
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+
     finally:
         conn.close()
 
@@ -409,109 +432,146 @@ def make_gear_thermo(value, max_value, title):
     )
     return fig
 
-def init_db():
+def fetch_scalar(cur, mode, sql, params=()):
+    cur.execute(adapt_sql(sql, mode), params)
+    row = cur.fetchone()
+    if row is None:
+        return 0
+    if isinstance(row, dict):
+        return list(row.values())[0]
+    try:
+        return row[0]
+    except Exception:
+        return 0
 
+def table_columns(cur, mode, table_name):
+    if mode == "postgres":
+        cur.execute("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = %s
+        """, (table_name,))
+        rows = cur.fetchall()
+        return [r["column_name"] if isinstance(r, dict) else r[0] for r in rows]
+
+    cur.execute(f"PRAGMA table_info({table_name})")
+    return [r[1] for r in cur.fetchall()]
+
+def add_column_if_missing(cur, mode, table_name, column_name, column_definition):
+    cols = table_columns(cur, mode, table_name)
+    if column_name not in cols:
+        cur.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_definition}")
+
+def init_db():
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
     conn, mode = get_connection()
     cur = conn.cursor()
-    auto = "AUTOINCREMENT" if mode == "sqlite" else ""
-    pk = f"INTEGER PRIMARY KEY {auto}".strip()
 
-    cur.execute(f"CREATE TABLE IF NOT EXISTS users (id {pk}, username TEXT UNIQUE, password TEXT, profile TEXT, full_name TEXT)")
-    cur.execute(f"CREATE TABLE IF NOT EXISTS machines (id {pk}, code TEXT UNIQUE, name TEXT, sector TEXT, criticality TEXT, active INTEGER DEFAULT 1)")
-    cur.execute(f"CREATE TABLE IF NOT EXISTS technicians (id {pk}, name TEXT, labor_rate REAL DEFAULT 0, phone TEXT, active INTEGER DEFAULT 1)")
-    cur.execute(f"CREATE TABLE IF NOT EXISTS parts (id {pk}, code TEXT UNIQUE, name TEXT, stock REAL DEFAULT 0, min_stock REAL DEFAULT 0, unit_cost REAL DEFAULT 0)")
-    cur.execute(f"""CREATE TABLE IF NOT EXISTS work_orders (
-        id {pk}, os_number TEXT UNIQUE, open_dt TEXT, sector TEXT, machine_code TEXT, machine_name TEXT, requester TEXT,
-        description TEXT, criticality TEXT, status TEXT, stop_start_dt TEXT, service_start_dt TEXT,
-        service_end_dt TEXT, response_min REAL DEFAULT 0, repair_min REAL DEFAULT 0, downtime_min REAL DEFAULT 0,
-        assigned_technician TEXT, root_cause TEXT, action_taken TEXT, labor_hours REAL DEFAULT 0, labor_cost REAL DEFAULT 0,
-        parts_cost REAL DEFAULT 0, total_cost REAL DEFAULT 0, operator_signature TEXT, technician_signature TEXT,
-        photo_path TEXT, notes TEXT, escalation_sent INTEGER DEFAULT 0, closed_summary_sent INTEGER DEFAULT 0,
-        maintenance_type TEXT DEFAULT 'Corretiva'
-    )""")
-    cur.execute(f"CREATE TABLE IF NOT EXISTS work_order_parts (id {pk}, wo_id INTEGER, part_code TEXT, qty REAL, unit_cost REAL, total_cost REAL)")
-    cur.execute(f"""CREATE TABLE IF NOT EXISTS preventive_plans (
-        id {pk}, machine_code TEXT, title TEXT, frequency_days INTEGER, last_done_date TEXT,
-        next_due_date TEXT, responsible TEXT, notes TEXT, active INTEGER DEFAULT 1, alert_sent INTEGER DEFAULT 0
-    )""")
-    # migrations
     try:
-        cols = [r[1] for r in cur.execute("PRAGMA table_info(technicians)").fetchall()]
-        if "active" not in cols:
-            cur.execute("ALTER TABLE technicians ADD COLUMN active INTEGER DEFAULT 1")
-    except Exception:
-        pass
-    try:
-        cols = [r[1] for r in cur.execute("PRAGMA table_info(machines)").fetchall()]
-        if "active" not in cols:
-            cur.execute("ALTER TABLE machines ADD COLUMN active INTEGER DEFAULT 1")
-    except Exception:
-        pass
-    try:
-        cols = [r[1] for r in cur.execute("PRAGMA table_info(work_orders)").fetchall()]
-        if "machine_name" not in cols:
-            cur.execute("ALTER TABLE work_orders ADD COLUMN machine_name TEXT")
-    except Exception:
-        pass
-    try:
-        cols = [r[1] for r in cur.execute("PRAGMA table_info(work_orders)").fetchall()]
-        if "maintenance_type" not in cols:
-            cur.execute("ALTER TABLE work_orders ADD COLUMN maintenance_type TEXT DEFAULT 'Corretiva'")
-    except Exception:
-        pass
+        pk = "INTEGER PRIMARY KEY AUTOINCREMENT" if mode == "sqlite" else "SERIAL PRIMARY KEY"
+        p = "?" if mode == "sqlite" else "%s"
 
-    if cur.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0:
-        cur.executemany("INSERT INTO users (username,password,profile,full_name) VALUES (?,?,?,?)", [
-            ("operador", hash_password("1234"), "Operador", "Operador Padrão"),
-            ("manutencao", hash_password("1234"), "Manutenção", "Equipe de Manutenção"),
-            ("gestor", hash_password("1234"), "Gestor", "Gestor da Manutenção"),
-        ])
-    if cur.execute("SELECT COUNT(*) FROM machines").fetchone()[0] == 0:
-        cur.executemany("INSERT INTO machines (code,name,sector,criticality,active) VALUES (?,?,?,?,1)", [
-            ("SLT-01","Slitter Principal","Conversão","Alta"),
-            ("PRS-02","Prensa Hidráulica","Estamparia","Média"),
-            ("EMB-03","Embutidora","Montagem","Alta"),
-            ("BNC-04","Bancada de Teste","Qualidade","Baixa"),
-        ])
-    if cur.execute("SELECT COUNT(*) FROM technicians").fetchone()[0] == 0:
-        cur.executemany("INSERT INTO technicians (name,labor_rate,phone,active) VALUES (?,?,?,1)", [
-            ("Carlos Manutenção",85.0,""),
-            ("Fernanda Mecânica",92.0,""),
-            ("Rafael Elétrica",98.0,""),
-        ])
-    if cur.execute("SELECT COUNT(*) FROM parts").fetchone()[0] == 0:
-        cur.executemany("INSERT INTO parts (code,name,stock,min_stock,unit_cost) VALUES (?,?,?,?,?)", [
-            ("ROL-6204","Rolamento 6204",20,5,28.5),
-            ("COR-A36","Correia A36",10,3,65.0),
-            ("SEN-PNP","Sensor PNP",8,2,115.0),
-            ("CNT-09A","Contator 9A",12,4,54.9),
-        ])
-    try:
-        cur.execute("""
-            UPDATE work_orders
-            SET machine_name = (
-                SELECT name FROM machines m WHERE m.code = work_orders.machine_code
+        cur.execute(f"CREATE TABLE IF NOT EXISTS users (id {pk}, username TEXT UNIQUE, password TEXT, profile TEXT, full_name TEXT)")
+        cur.execute(f"CREATE TABLE IF NOT EXISTS machines (id {pk}, code TEXT UNIQUE, name TEXT, sector TEXT, criticality TEXT, active INTEGER DEFAULT 1)")
+        cur.execute(f"CREATE TABLE IF NOT EXISTS technicians (id {pk}, name TEXT, labor_rate REAL DEFAULT 0, phone TEXT, active INTEGER DEFAULT 1)")
+        cur.execute(f"CREATE TABLE IF NOT EXISTS parts (id {pk}, code TEXT UNIQUE, name TEXT, stock REAL DEFAULT 0, min_stock REAL DEFAULT 0, unit_cost REAL DEFAULT 0)")
+        cur.execute(f"""CREATE TABLE IF NOT EXISTS work_orders (
+            id {pk}, os_number TEXT UNIQUE, open_dt TEXT, sector TEXT, machine_code TEXT, machine_name TEXT, requester TEXT,
+            description TEXT, criticality TEXT, status TEXT, stop_start_dt TEXT, service_start_dt TEXT,
+            service_end_dt TEXT, response_min REAL DEFAULT 0, repair_min REAL DEFAULT 0, downtime_min REAL DEFAULT 0,
+            assigned_technician TEXT, root_cause TEXT, action_taken TEXT, labor_hours REAL DEFAULT 0, labor_cost REAL DEFAULT 0,
+            parts_cost REAL DEFAULT 0, total_cost REAL DEFAULT 0, operator_signature TEXT, technician_signature TEXT,
+            photo_path TEXT, notes TEXT, escalation_sent INTEGER DEFAULT 0, closed_summary_sent INTEGER DEFAULT 0,
+            maintenance_type TEXT DEFAULT 'Corretiva'
+        )""")
+        cur.execute(f"CREATE TABLE IF NOT EXISTS work_order_parts (id {pk}, wo_id INTEGER, part_code TEXT, qty REAL, unit_cost REAL, total_cost REAL)")
+        cur.execute(f"""CREATE TABLE IF NOT EXISTS preventive_plans (
+            id {pk}, machine_code TEXT, title TEXT, frequency_days INTEGER, last_done_date TEXT,
+            next_due_date TEXT, responsible TEXT, notes TEXT, active INTEGER DEFAULT 1, alert_sent INTEGER DEFAULT 0
+        )""")
+
+        # Migrações compatíveis com SQLite e PostgreSQL.
+        add_column_if_missing(cur, mode, "technicians", "active", "active INTEGER DEFAULT 1")
+        add_column_if_missing(cur, mode, "machines", "active", "active INTEGER DEFAULT 1")
+        add_column_if_missing(cur, mode, "work_orders", "machine_name", "machine_name TEXT")
+        add_column_if_missing(cur, mode, "work_orders", "maintenance_type", "maintenance_type TEXT DEFAULT 'Corretiva'")
+
+        if fetch_scalar(cur, mode, "SELECT COUNT(*) FROM users") == 0:
+            cur.executemany(
+                f"INSERT INTO users (username,password,profile,full_name) VALUES ({p},{p},{p},{p})",
+                [
+                    ("operador", hash_password("1234"), "Operador", "Operador Padrão"),
+                    ("manutencao", hash_password("1234"), "Manutenção", "Equipe de Manutenção"),
+                    ("gestor", hash_password("1234"), "Gestor", "Gestor da Manutenção"),
+                ]
             )
-            WHERE (machine_name IS NULL OR machine_name = '')
-              AND machine_code IS NOT NULL AND machine_code <> ''
-        """)
-    except Exception:
-        pass
 
-    users = cur.execute("SELECT id,password FROM users").fetchall()
-    for uid, pw in users:
-        if pw and len(str(pw)) != 64:
-            cur.execute("UPDATE users SET password=? WHERE id=?", (hash_password(str(pw)), uid))
-    # MIGRAÇÃO maintenance_type
-    try:
-        cols = [r[1] for r in cur.execute("PRAGMA table_info(work_orders)").fetchall()]
-        if "maintenance_type" not in cols:
-            cur.execute("ALTER TABLE work_orders ADD COLUMN maintenance_type TEXT DEFAULT 'Corretiva'")
-    except:
-        pass
+        if fetch_scalar(cur, mode, "SELECT COUNT(*) FROM machines") == 0:
+            cur.executemany(
+                f"INSERT INTO machines (code,name,sector,criticality,active) VALUES ({p},{p},{p},{p},1)",
+                [
+                    ("SLT-01","Slitter Principal","Conversão","Alta"),
+                    ("PRS-02","Prensa Hidráulica","Estamparia","Média"),
+                    ("EMB-03","Embutidora","Montagem","Alta"),
+                    ("BNC-04","Bancada de Teste","Qualidade","Baixa"),
+                ]
+            )
 
-    conn.commit()
-    conn.close()
+        if fetch_scalar(cur, mode, "SELECT COUNT(*) FROM technicians") == 0:
+            cur.executemany(
+                f"INSERT INTO technicians (name,labor_rate,phone,active) VALUES ({p},{p},{p},1)",
+                [
+                    ("Carlos Manutenção",85.0,""),
+                    ("Fernanda Mecânica",92.0,""),
+                    ("Rafael Elétrica",98.0,""),
+                ]
+            )
+
+        if fetch_scalar(cur, mode, "SELECT COUNT(*) FROM parts") == 0:
+            cur.executemany(
+                f"INSERT INTO parts (code,name,stock,min_stock,unit_cost) VALUES ({p},{p},{p},{p},{p})",
+                [
+                    ("ROL-6204","Rolamento 6204",20,5,28.5),
+                    ("COR-A36","Correia A36",10,3,65.0),
+                    ("SEN-PNP","Sensor PNP",8,2,115.0),
+                    ("CNT-09A","Contator 9A",12,4,54.9),
+                ]
+            )
+
+        try:
+            cur.execute("""
+                UPDATE work_orders
+                SET machine_name = (
+                    SELECT name FROM machines m WHERE m.code = work_orders.machine_code
+                )
+                WHERE (machine_name IS NULL OR machine_name = '')
+                  AND machine_code IS NOT NULL AND machine_code <> ''
+            """)
+        except Exception:
+            conn.rollback()
+            cur = conn.cursor()
+
+        cur.execute("SELECT id,password FROM users")
+        users = cur.fetchall()
+        for row in users:
+            uid = row["id"] if isinstance(row, dict) else row[0]
+            pw = row["password"] if isinstance(row, dict) else row[1]
+            if pw and len(str(pw)) != 64:
+                cur.execute(adapt_sql("UPDATE users SET password=? WHERE id=?", mode), (hash_password(str(pw)), uid))
+
+        conn.commit()
+
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        st.error(f"Erro ao inicializar banco de dados: {e}")
+        raise
+
+    finally:
+        conn.close()
 
 init_db()
 
