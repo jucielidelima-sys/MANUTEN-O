@@ -98,21 +98,28 @@ def get_db_mode():
 
 def get_connection():
     mode = get_db_mode()
+
     if mode == "postgres":
         try:
             import psycopg
             from psycopg.rows import dict_row
+        except Exception as e:
+            st.error(f"Biblioteca psycopg não instalada/configurada: {e}")
+            st.stop()
 
-            db_url = sec("POSTGRES_URL", "")
-            if not db_url:
-                raise ValueError("POSTGRES_URL não configurada.")
+        db_url = sec("POSTGRES_URL", "")
+        if not db_url:
+            st.error("POSTGRES_URL não configurada. Configure a URL do Supabase nos Secrets do Streamlit Cloud.")
+            st.stop()
 
+        try:
             conn = psycopg.connect(db_url)
             conn.row_factory = dict_row
             return conn, "postgres"
-
         except Exception as e:
-            st.warning(f"Falha ao conectar no PostgreSQL. Usando SQLite. Motivo: {e}")
+            st.error(f"Falha ao conectar no PostgreSQL/Supabase: {e}")
+            st.error("O app foi bloqueado para não cair em SQLite e não criar banco local vazio.")
+            st.stop()
 
     conn = sqlite3.connect(DB_SQLITE, check_same_thread=False)
     conn.row_factory = sqlite3.Row
